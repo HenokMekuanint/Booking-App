@@ -1,6 +1,4 @@
-/app/node_modules/
-/couch/data/
-/pbscript/node_modules/
-/pbscript/tours/
-/pbscript/pendingBookings/
-/pbscript/bookingsNeedContact/
+.vscode
+.idea
+postgres
+redis

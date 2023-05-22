@@ -1,21 +1,86 @@
-version: "3"
+version: '3.8'
+
 services:
-  app:
-    build:
-      context: ./app/
+  redis:
+    image: redis
     ports:
-      - "8000:8000"
-
-  couch:
-    build:
-      context: ./couch/
+      - "6379:6379"
     volumes:
-      - ./couch/data:/opt/couchdb/data
-    ports:
-      - "5984:5984"
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    container_name: redis
+    networks:
+      - database
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  pbscript:
-    build:
-      context: ./pbscript/
+  postgres:
+    image: postgres:alpine
     ports:
-      - "8080:8080"
+      - "5432:5432"
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bookvita
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - database
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: ./server/
+    networks:
+      - database
+      - web
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    entrypoint: /entrypoint.sh
+    environment:
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: bookvita
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379
+      DJANGO_SETTINGS_MODULE: server.settings_prod
+      ALLOWED_HOSTS: 'server'
+      PYTHONPATH: .
+    restart: always
+
+  client:
+    build: ./client/
+    ports:
+      - "5173:5173"
+
+    networks:
+      - web
+
+    depends_on:
+      - server
+      - redis
+      - postgres
+    environment:
+      SERVER_URL: http://server:8000
+
+networks:
+  database:
+    driver: bridge
+  web:
+    driver: bridge
+
+volumes:
+    redis-data:
+    postgres-data:
+
